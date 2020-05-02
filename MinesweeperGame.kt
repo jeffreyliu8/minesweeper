@@ -1,7 +1,6 @@
-const val CMD_NEW = "new"
-const val CMD_REVEAL = "reveal"
-const val CMD_MARK = "mark"
-
+enum class GameCommands {
+    new, reveal, mark
+}
 
 fun main() {
     println("Please enter a command with 2 int arguments:")
@@ -26,27 +25,38 @@ fun main() {
         val input1 = splitted[1].toIntOrNull()!!
         val input2 = splitted[2].toIntOrNull()!!
 
-        if (splitted[0].toLowerCase() == CMD_NEW) {
+        if (splitted[0].toLowerCase() == GameCommands.new.name) {
             val isSuccussful = game.newBoard(input1, input2)
             if (isSuccussful) {
                 game.printBoard()
-                println("New board created, go ahead with \"reveal\" or \"mark\" cmd");
+                game.printUserBoard()
+                println("New board created, go ahead with \"reveal\" or \"mark\" cmd")
             } else {
-                println("Failed to create board");
+                println("Failed to create board")
             }
-        } else if (splitted[0].toLowerCase() == CMD_REVEAL) {
+        } else if (splitted[0].toLowerCase() == GameCommands.reveal.name) {
             val isSuccussful = game.reveal(input2, input1)
             if (isSuccussful) {
                 game.printBoard()
+                game.printUserBoard()
+
+                if (game.getStatus() == GameStatus.lose) {
+                    println("You lost, game over")
+                }
             } else {
-                println("reveal failed, please check input");
+                println("reveal failed, please check input")
             }
-        } else if (splitted[0].toLowerCase() == CMD_MARK) {
+        } else if (splitted[0].toLowerCase() == GameCommands.mark.name) {
             val isSuccussful = game.mark(input2, input1)
             if (isSuccussful) {
                 game.printBoard()
+                game.printUserBoard()
+
+                if (game.getStatus() == GameStatus.win) {
+                    println("Congrat! You win!")
+                }
             } else {
-                println("mark failed, please check input");
+                println("mark failed, please check input")
             }
         } else {
             println("Invalid cmd")
@@ -54,10 +64,16 @@ fun main() {
     }
 }
 
+enum class GameStatus {
+    not_started, ongoing, win, lose
+}
+
 class MinesweeperGame {
-    lateinit var board: Array<CharArray>
-    val mines = HashSet<Pair<Int, Int>>() // actual location of mines
-    var numberOfMines = 0 // how many the user set
+    private lateinit var board: Array<CharArray>
+    private lateinit var userboard: Array<CharArray>
+    private val mines = HashSet<Pair<Int, Int>>() // actual location of mines
+    private var numberOfMines = 0 // how many the user set
+    private var status = GameStatus.not_started
 
     fun newBoard(size: Int, numberOfMines: Int): Boolean {
         if (numberOfMines < 0) {
@@ -72,7 +88,17 @@ class MinesweeperGame {
         this.numberOfMines = numberOfMines
         mines.clear()
 
-        board = Array(size) { CharArray(size) }
+        board = Array(size) {
+            CharArray(size, {
+                ' '
+            })
+        }
+        userboard = Array(size) {
+            CharArray(size, {
+                '_'
+            })
+        }
+        status = GameStatus.not_started
         return true
     }
 
@@ -86,6 +112,17 @@ class MinesweeperGame {
         if (mines.size == 0) {
             initMinesWithLocation(row, col)
         }
+        status = GameStatus.ongoing
+        if (board[row][col] == 'b') {
+            status = GameStatus.lose
+            userboard[row][col] = 'X' // dead, exploded
+            revealAnswer()
+        } else {
+            // not bomb,
+            val v = numberOfMinesAround(row, col).toString().first()
+            userboard[row][col] = v
+        }
+
         return true
     }
 
@@ -98,6 +135,12 @@ class MinesweeperGame {
         }
         if (mines.size == 0) {
             initMinesWithLocation(row, col)
+        }
+        status = GameStatus.ongoing
+        if (userboard[row][col] == 'M') {
+            userboard[row][col] = '_'
+        } else if (userboard[row][col] == '_') {
+            userboard[row][col] = 'M'
         }
         return true
     }
@@ -134,7 +177,7 @@ class MinesweeperGame {
         for (i in board.indices) {
             board[i] = board[i].toMutableList().shuffled().toCharArray()
         }
-
+        mines.clear()
         for (i in board.indices) {
             for (j in board.indices) {
                 if (board[i][j] == 'b') {
@@ -159,6 +202,68 @@ class MinesweeperGame {
         } else {
             println("Board has not been initialized")
         }
+    }
+
+    fun printUserBoard() {
+        println("================= user board ======")
+        if (::userboard.isInitialized) {
+            for (array in userboard) {
+                for (value in array) {
+                    print("$value ")
+                }
+                println()
+            }
+        } else {
+            println("User Board has not been initialized")
+        }
+    }
+
+    fun getStatus(): GameStatus {
+        return status
+    }
+
+    private fun revealAnswer() {
+        for (i in board.indices) {
+            for (j in board.indices) {
+                if (userboard[i][j] == 'X') {
+                    continue
+                }
+                if (board[i][j] == 'b') {
+                    userboard[i][j] = 'b'
+                    continue
+                }
+                userboard[i][j] = numberOfMinesAround(i, j).toString().first()
+            }
+        }
+    }
+
+    private fun numberOfMinesAround(row: Int, col: Int): Int {
+        var count = 0
+        if (row - 1 >= 0 && board[row - 1][col] == 'b') {
+            count++
+        }
+        if (row + 1 < board.size && board[row + 1][col] == 'b') {
+            count++
+        }
+        if (col - 1 >= 0 && board[row][col - 1] == 'b') {
+            count++
+        }
+        if (col + 1 < board.size && board[row][col + 1] == 'b') {
+            count++
+        }
+        if (row - 1 >= 0 && col - 1 >= 0 && board[row - 1][col - 1] == 'b') {
+            count++
+        }
+        if (row + 1 < board.size && col + 1 < board.size && board[row + 1][col + 1] == 'b') {
+            count++
+        }
+        if (row - 1 >= 0 && col + 1 < board.size && board[row - 1][col + 1] == 'b') {
+            count++
+        }
+        if (row + 1 < board.size && col - 1 >= 0 && board[row + 1][col - 1] == 'b') {
+            count++
+        }
+        return count
     }
 }
 
