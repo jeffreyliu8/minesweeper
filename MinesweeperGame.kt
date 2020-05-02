@@ -70,8 +70,9 @@ class MinesweeperGame {
             return false
         }
         this.numberOfMines = numberOfMines
+        mines.clear()
 
-        board = Array(size, { CharArray(size) })
+        board = Array(size) { CharArray(size) }
         return true
     }
 
@@ -109,9 +110,8 @@ class MinesweeperGame {
 
     private fun initMines() {
         var count = 0
-
-        for (i in 0 until board.size) {
-            for (j in 0 until board.size) {
+        for (i in board.indices) {
+            for (j in board.indices) {
                 if (count >= numberOfMines) {
                     board[i][j] = '_'
                 } else {
@@ -121,22 +121,22 @@ class MinesweeperGame {
             }
         }
 
-        for (j in 0 until board.size) {
+        for (j in board.indices) {
             val temp = mutableListOf<Char>()
-            for (i in 0 until board.size) {
+            for (i in board.indices) {
                 temp.add(board[i][j])
             }
             temp.shuffle()
-            for (k in 0 until board.size) {
+            for (k in board.indices) {
                 board[k][j] = temp[k]
             }
         }
-        for (i in 0 until board.size) {
+        for (i in board.indices) {
             board[i] = board[i].toMutableList().shuffled().toCharArray()
         }
-        mines.clear()
-        for (i in 0 until board.size) {
-            for (j in 0 until board.size) {
+
+        for (i in board.indices) {
+            for (j in board.indices) {
                 if (board[i][j] == 'b') {
                     mines.add(Pair(i, j))
                 }
