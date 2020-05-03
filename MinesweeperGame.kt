@@ -2,6 +2,11 @@ enum class GameCommands {
     new, reveal, mark
 }
 
+const val BOMB = 'B' // bomb
+const val MARK = 'M' // mark
+const val BOMB_DIE = 'X' // bomb where player dies
+const val BLANK = '_'
+
 fun main() {
     println("Please enter a command with 2 int arguments:")
     val game = MinesweeperGame()
@@ -41,7 +46,7 @@ fun main() {
                 game.printUserBoard()
 
                 if (game.getStatus() == GameStatus.lose) {
-                    println("You lost, game over")
+                    println("You lost, game over, please new game.")
                 }
             } else {
                 println("reveal failed, please check input")
@@ -53,7 +58,7 @@ fun main() {
                 game.printUserBoard()
 
                 if (game.getStatus() == GameStatus.win) {
-                    println("Congrat! You win!")
+                    println("Congrat! You win! Please new game.")
                 }
             } else {
                 println("mark failed, please check input")
@@ -69,14 +74,16 @@ enum class GameStatus {
 }
 
 class MinesweeperGame {
-    private lateinit var board: Array<CharArray>
-    private lateinit var userboard: Array<CharArray>
+    private lateinit var board: Array<CharArray> // internal use, sees can't see
+    private lateinit var userboard: Array<CharArray> // what the player sees
     private val mines = HashSet<Pair<Int, Int>>() // actual location of mines
-    private var numberOfMines = 0 // how many the user set
+    private var correctMinesCount = 0 // how many player got right
+    private var totalMarks = 0 // how many marks user put, right or wrong
+    private var numberOfMines = 0 // how many the player set
     private var status = GameStatus.not_started
 
     fun newBoard(size: Int, numberOfMines: Int): Boolean {
-        if (numberOfMines < 0) {
+        if (numberOfMines <= 0) {
             return false
         }
         if (numberOfMines >= size * size) {
@@ -87,6 +94,8 @@ class MinesweeperGame {
         }
         this.numberOfMines = numberOfMines
         mines.clear()
+        correctMinesCount = 0
+        totalMarks = 0
 
         board = Array(size) {
             CharArray(size, {
@@ -95,38 +104,71 @@ class MinesweeperGame {
         }
         userboard = Array(size) {
             CharArray(size, {
-                '_'
+                BLANK
             })
         }
-        status = GameStatus.not_started
+        status = GameStatus.ongoing
         return true
     }
 
     fun reveal(row: Int, col: Int): Boolean {
+        if (status != GameStatus.ongoing) {
+            return false
+        }
         if (!::board.isInitialized) {
             return false
         }
         if (row >= board.size || col >= board.size || row < 0 || col < 0) {
             return false
         }
+        if (userboard[row][col]==MARK) {
+            println("Please unmark before revealing")
+            return false
+        }
         if (mines.size == 0) {
             initMinesWithLocation(row, col)
         }
-        status = GameStatus.ongoing
-        if (board[row][col] == 'b') {
+        revealHelper(row, col)
+        return true
+    }
+
+    private fun revealHelper(row: Int, col: Int) {
+        if (row >= board.size || col >= board.size || row < 0 || col < 0) {
+            return
+        }
+        if (userboard[row][col] >= '0' && userboard[row][col] <= '8') {
+            return
+        }
+        if (board[row][col] == BOMB) {
             status = GameStatus.lose
-            userboard[row][col] = 'X' // dead, exploded
+            userboard[row][col] = BOMB_DIE // dead, exploded
             revealAnswer()
         } else {
-            // not bomb,
-            val v = numberOfMinesAround(row, col).toString().first()
+            // not bomb
+            val numOfMines = board[row][col]
+            if (userboard[row][col] == MARK) {
+                totalMarks--
+            }
+            val v = numOfMines.toString().first()
             userboard[row][col] = v
+            if (numOfMines == '0') {
+                // auto reveal all neighbor
+                revealHelper(row + 1, col)
+                revealHelper(row - 1, col)
+                revealHelper(row, col + 1)
+                revealHelper(row, col - 1)
+                revealHelper(row + 1, col + 1)
+                revealHelper(row - 1, col - 1)
+                revealHelper(row + 1, col - 1)
+                revealHelper(row - 1, col + 1)
+            }
         }
-
-        return true
     }
 
     fun mark(row: Int, col: Int): Boolean {
+        if (status != GameStatus.ongoing) {
+            return false
+        }
         if (!::board.isInitialized) {
             return false
         }
@@ -136,19 +178,41 @@ class MinesweeperGame {
         if (mines.size == 0) {
             initMinesWithLocation(row, col)
         }
-        status = GameStatus.ongoing
-        if (userboard[row][col] == 'M') {
-            userboard[row][col] = '_'
-        } else if (userboard[row][col] == '_') {
-            userboard[row][col] = 'M'
+
+        if (userboard[row][col] == MARK) {
+            userboard[row][col] = BLANK
+            totalMarks--
+            if (mines.contains(Pair(row, col))) {
+                correctMinesCount--
+            }
+            checkWin()
+        } else if (userboard[row][col] == BLANK) {
+            userboard[row][col] = MARK
+            totalMarks++
+            if (mines.contains(Pair(row, col))) {
+                correctMinesCount++
+            }
+            checkWin()
+        } else {
+            return false
         }
         return true
     }
 
+    private fun checkWin() {
+        println(correctMinesCount)
+        println(mines.size)
+        println(totalMarks)
+        if (correctMinesCount == mines.size && totalMarks == correctMinesCount) {
+            status = GameStatus.win
+        }
+    }
+
     private fun initMinesWithLocation(row: Int, col: Int) {
-        while (board[row][col] != '_') {
+        while (board[row][col] != BLANK) {
             initMines()
         }
+        fillAnswerInBoard()
     }
 
     private fun initMines() {
@@ -156,9 +220,9 @@ class MinesweeperGame {
         for (i in board.indices) {
             for (j in board.indices) {
                 if (count >= numberOfMines) {
-                    board[i][j] = '_'
+                    board[i][j] = BLANK
                 } else {
-                    board[i][j] = 'b'
+                    board[i][j] = BOMB
                     count++
                 }
             }
@@ -180,7 +244,7 @@ class MinesweeperGame {
         mines.clear()
         for (i in board.indices) {
             for (j in board.indices) {
-                if (board[i][j] == 'b') {
+                if (board[i][j] == BOMB) {
                     mines.add(Pair(i, j))
                 }
             }
@@ -222,45 +286,53 @@ class MinesweeperGame {
         return status
     }
 
+    private fun fillAnswerInBoard() {
+        for (i in board.indices) {
+            for (j in board.indices) {
+                if (board[i][j] == BOMB) {
+                    continue
+                }
+                board[i][j] = numberOfMinesAround(i, j).toString().first()
+            }
+        }
+    }
+
     private fun revealAnswer() {
         for (i in board.indices) {
             for (j in board.indices) {
-                if (userboard[i][j] == 'X') {
+                if (userboard[i][j] == BOMB_DIE) {
                     continue
+                } else if (board[i][j] == BOMB) {
+                    userboard[i][j] = BOMB
                 }
-                if (board[i][j] == 'b') {
-                    userboard[i][j] = 'b'
-                    continue
-                }
-                userboard[i][j] = numberOfMinesAround(i, j).toString().first()
             }
         }
     }
 
     private fun numberOfMinesAround(row: Int, col: Int): Int {
         var count = 0
-        if (row - 1 >= 0 && board[row - 1][col] == 'b') {
+        if (row - 1 >= 0 && board[row - 1][col] == BOMB) {
             count++
         }
-        if (row + 1 < board.size && board[row + 1][col] == 'b') {
+        if (row + 1 < board.size && board[row + 1][col] == BOMB) {
             count++
         }
-        if (col - 1 >= 0 && board[row][col - 1] == 'b') {
+        if (col - 1 >= 0 && board[row][col - 1] == BOMB) {
             count++
         }
-        if (col + 1 < board.size && board[row][col + 1] == 'b') {
+        if (col + 1 < board.size && board[row][col + 1] == BOMB) {
             count++
         }
-        if (row - 1 >= 0 && col - 1 >= 0 && board[row - 1][col - 1] == 'b') {
+        if (row - 1 >= 0 && col - 1 >= 0 && board[row - 1][col - 1] == BOMB) {
             count++
         }
-        if (row + 1 < board.size && col + 1 < board.size && board[row + 1][col + 1] == 'b') {
+        if (row + 1 < board.size && col + 1 < board.size && board[row + 1][col + 1] == BOMB) {
             count++
         }
-        if (row - 1 >= 0 && col + 1 < board.size && board[row - 1][col + 1] == 'b') {
+        if (row - 1 >= 0 && col + 1 < board.size && board[row - 1][col + 1] == BOMB) {
             count++
         }
-        if (row + 1 < board.size && col - 1 >= 0 && board[row + 1][col - 1] == 'b') {
+        if (row + 1 < board.size && col - 1 >= 0 && board[row + 1][col - 1] == BOMB) {
             count++
         }
         return count
