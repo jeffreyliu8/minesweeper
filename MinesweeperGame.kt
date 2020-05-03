@@ -33,7 +33,7 @@ fun main() {
         if (splitted[0].toLowerCase() == GameCommands.new.name) {
             val isSuccussful = game.newBoard(input1, input2)
             if (isSuccussful) {
-                game.printBoard()
+//                game.printBoard()
                 game.printUserBoard()
                 println("New board created, go ahead with \"reveal\" or \"mark\" cmd")
             } else {
@@ -42,24 +42,18 @@ fun main() {
         } else if (splitted[0].toLowerCase() == GameCommands.reveal.name) {
             val isSuccussful = game.reveal(input2, input1)
             if (isSuccussful) {
-                game.printBoard()
+//                game.printBoard()
                 game.printUserBoard()
-
-                if (game.getStatus() == GameStatus.lose) {
-                    println("You lost, game over, please new game.")
-                }
+                winLoseMsg(game.getStatus())
             } else {
                 println("reveal failed, please check input")
             }
         } else if (splitted[0].toLowerCase() == GameCommands.mark.name) {
             val isSuccussful = game.mark(input2, input1)
             if (isSuccussful) {
-                game.printBoard()
+//                game.printBoard()
                 game.printUserBoard()
-
-                if (game.getStatus() == GameStatus.win) {
-                    println("Congrat! You win! Please new game.")
-                }
+                winLoseMsg(game.getStatus())
             } else {
                 println("mark failed, please check input")
             }
@@ -76,7 +70,7 @@ enum class GameStatus {
 class MinesweeperGame {
     private lateinit var board: Array<CharArray> // internal use, sees can't see
     private lateinit var userboard: Array<CharArray> // what the player sees
-    private val mines = HashSet<Pair<Int, Int>>() // actual location of mines
+    private var areMinesSet = false // has the mines been placed
     private var correctMinesCount = 0 // how many player got right
     private var totalMarks = 0 // how many marks user put, right or wrong
     private var numberOfMines = 0 // how many the player set
@@ -93,7 +87,7 @@ class MinesweeperGame {
             return false
         }
         this.numberOfMines = numberOfMines
-        mines.clear()
+        areMinesSet = false
         correctMinesCount = 0
         totalMarks = 0
 
@@ -121,14 +115,15 @@ class MinesweeperGame {
         if (row >= board.size || col >= board.size || row < 0 || col < 0) {
             return false
         }
-        if (userboard[row][col]==MARK) {
+        if (userboard[row][col] == MARK) {
             println("Please unmark before revealing")
             return false
         }
-        if (mines.size == 0) {
+        if (!areMinesSet) {
             initMinesWithLocation(row, col)
         }
         revealHelper(row, col)
+        checkWin()
         return true
     }
 
@@ -175,21 +170,21 @@ class MinesweeperGame {
         if (row >= board.size || col >= board.size || row < 0 || col < 0) {
             return false
         }
-        if (mines.size == 0) {
+        if (!areMinesSet) {
             initMinesWithLocation(row, col)
         }
 
         if (userboard[row][col] == MARK) {
             userboard[row][col] = BLANK
             totalMarks--
-            if (mines.contains(Pair(row, col))) {
+            if (board[row][col] == BOMB) {
                 correctMinesCount--
             }
             checkWin()
         } else if (userboard[row][col] == BLANK) {
             userboard[row][col] = MARK
             totalMarks++
-            if (mines.contains(Pair(row, col))) {
+            if (board[row][col] == BOMB) {
                 correctMinesCount++
             }
             checkWin()
@@ -200,12 +195,21 @@ class MinesweeperGame {
     }
 
     private fun checkWin() {
-        println(correctMinesCount)
-        println(mines.size)
-        println(totalMarks)
-        if (correctMinesCount == mines.size && totalMarks == correctMinesCount) {
+        if ((correctMinesCount == numberOfMines && totalMarks == correctMinesCount) ||
+                isRemainingTilesExceptThoseWithMinesZero()) {
             status = GameStatus.win
         }
+    }
+
+    private fun isRemainingTilesExceptThoseWithMinesZero(): Boolean {
+        for (i in board.indices) {
+            for (j in board.indices) {
+                if (userboard[i][j] == BLANK && board[i][j] != BOMB) {
+                    return false
+                }
+            }
+        }
+        return true
     }
 
     private fun initMinesWithLocation(row: Int, col: Int) {
@@ -241,18 +245,7 @@ class MinesweeperGame {
         for (i in board.indices) {
             board[i] = board[i].toMutableList().shuffled().toCharArray()
         }
-        mines.clear()
-        for (i in board.indices) {
-            for (j in board.indices) {
-                if (board[i][j] == BOMB) {
-                    mines.add(Pair(i, j))
-                }
-            }
-        }
-//        mines.forEach {
-//            val r = "${it.first} ${it.second}"
-//            println(r)
-//        }
+        areMinesSet = true
     }
 
     fun printBoard() {
@@ -269,7 +262,6 @@ class MinesweeperGame {
     }
 
     fun printUserBoard() {
-        println("================= user board ======")
         if (::userboard.isInitialized) {
             for (array in userboard) {
                 for (value in array) {
@@ -341,4 +333,18 @@ class MinesweeperGame {
 
 fun String.isInt(): Boolean {
     return this.toIntOrNull() != null
+}
+
+private fun winLoseMsg(status: GameStatus) {
+    when (status) {
+        GameStatus.win -> {
+            println("Congrat! You win! Please new game.")
+        }
+        GameStatus.lose -> {
+            println("You lost, game over, please new game.")
+        }
+        else -> {
+
+        }
+    }
 }
